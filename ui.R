@@ -1,4 +1,5 @@
 indicator_info <- function(id, text) {
+  
   tags$span(
     class = "indicator-info",
     tags$button(
@@ -1494,10 +1495,10 @@ br(),
                           class = "kpi-top",
                           div(
                             class = "kpi-title",
-                            "Active Sensors",
+                            "Active Monitors",
                             indicator_info(
                               "info_active_sensors",
-                              "Number of unique ground-monitoring sensors reporting data for the selected country, states, and year."
+                              "Number of unique ground-monitoring Monitors reporting data for the selected country, states, and year."
                             )
                           ),
                           tags$i(class = "bi bi-broadcast-pin kpi-icon")
@@ -1515,7 +1516,7 @@ br(),
                           class = "kpi-top",
                           div(
                             class = "kpi-title",
-                            "Owner Groups",
+                            "Awardee Groups",
                             indicator_info(
                               "info_owner_groups",
                               "Number of distinct awardee or monitoring-network groups represented in the selected data."
@@ -1561,10 +1562,10 @@ br(),
                           class = "kpi-top",
                           div(
                             class = "kpi-title",
-                            "Data Coverage",
+                            "Data Availability",
                             indicator_info(
                               "info_data_coverage",
-                              "Average percentage of expected observations reported by the selected sensors. A higher percentage means more complete data."
+                              "Average percentage of expected observations reported by the selected Monitors A higher percentage means more complete data."
                             )
                           ),
                           tags$i(class = "bi bi-check-circle kpi-icon")
@@ -1646,7 +1647,7 @@ br(),
                       
                       actionButton(
                         "load_sensor_layer",
-                        "Load Sensors",
+                        "Load Monitors",
                         class = "btn-map-action"
                       ),
                       

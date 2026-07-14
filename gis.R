@@ -872,13 +872,12 @@ observeEvent(input$load_sensor_layer, {
       
       popup = ~paste0(
         "<div style='font-family:Arial, sans-serif; font-size:13px; line-height:1.5;'>",
-        "<b>Location:</b> ", location_html, "<br/>",
-        "<b>Sensor:</b> ", owner_html, "<br/>",
-        "<b>PM<sub>2.5</sub>:</b> ", round(pm25, 1), " µg/m³<br/>",
-        "<b>Data coverage:</b> ", coverage, "%<br/>",
+        "<b>Monitor Name:</b> ", location_html, "<br/>",
+        "<b>Awardee Group:</b> ", owner_html, "<br/>",
+        "<b>PM<sub>2.5</sub> Concentration:</b> ", round(pm25, 1), " µg/m³<br/>",
+        "<b>Data Availability:</b> ", coverage, "%<br/>",
         "<b>Reporting months:</b> ", reporting_months, "<br/>",
-        "<b>Latitude:</b> ", round(lat, 4), "<br/>",
-        "<b>Longitude:</b> ", round(lng, 4),
+        "<b>Coordinate:</b> ", round(lat, 6), " ", round(lng, 6),
         "</div>"
       )
     )
@@ -1625,6 +1624,7 @@ output$gis_table <- reactable::renderReactable({
       ),
       
       Coverage = reactable::colDef(
+        name = "Data Availability",
         width = 180,
         cell = function(value) {
           bar_cell(
@@ -1712,7 +1712,9 @@ output$gis_table <- reactable::renderReactable({
             ),
             
             Coverage = reactable::colDef(
+              name = "Data Availability",
               width = 180,
+              align = "center",
               cell = function(value) {
                 bar_cell(
                   value = value,
@@ -1726,6 +1728,7 @@ output$gis_table <- reactable::renderReactable({
             PM25 = reactable::colDef(
               name = pm_header,
               width = 180,
+              align = "center",
               cell = function(value) {
                 bar_cell(
                   value = value,
@@ -1798,7 +1801,9 @@ output$gis_table <- reactable::renderReactable({
                   ),
                   
                   Coverage = reactable::colDef(
+                    name = "Data Availability",
                     width = 180,
+                    align = "center",
                     cell = function(value) {
                       bar_cell(
                         value = value,
@@ -1812,6 +1817,7 @@ output$gis_table <- reactable::renderReactable({
                   PM25 = reactable::colDef(
                     name = pm_header,
                     width = 180,
+                    align = "center",
                     cell = function(value) {
                       bar_cell(
                         value = value,

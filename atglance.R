@@ -125,7 +125,7 @@ output$active_sensor_drilldown <- highcharter::renderHighchart({
       data = year_points,
       custom = list(
         chartTitle = active_sensor_info_html(
-          paste0(selected_country, " - Active Sensors by Year")
+          paste0(selected_country, " - Active Monitors by Year")
         )
       )
     )
@@ -159,7 +159,7 @@ output$active_sensor_drilldown <- highcharter::renderHighchart({
               selected_country,
               " - ",
               selected_year,
-              " - Active Sensors by Month"
+              " - Active Monitors by Month"
             )
           )
         )
@@ -210,7 +210,7 @@ output$active_sensor_drilldown <- highcharter::renderHighchart({
       )
     ) %>%
     highcharter::hc_title(
-      text = active_sensor_info_html("Active Sensors by Country"),
+      text = active_sensor_info_html("Active Monitors by Country"),
       useHTML = TRUE,
       align = "center",
       style = list(
@@ -236,7 +236,7 @@ output$active_sensor_drilldown <- highcharter::renderHighchart({
       min = 0,
       allowDecimals = FALSE,
       title = list(
-        text = "Distinct active sensors",
+        text = "Distinct active Monitors",
         style = list(
           color = "#374151",
           fontWeight = "700"
@@ -252,7 +252,7 @@ output$active_sensor_drilldown <- highcharter::renderHighchart({
       type = "bar",
       data = country_points,
       custom = list(
-        chartTitle = active_sensor_info_html("Active Sensors by Country")
+        chartTitle = active_sensor_info_html("Active Monitors by Country")
       )
     ) %>%
     highcharter::hc_drilldown(
@@ -293,7 +293,7 @@ output$active_sensor_drilldown <- highcharter::renderHighchart({
         "function () {
           return `<div style='font-family:Montserrat, Arial, sans-serif; font-size:12px; line-height:1.6;'>
             <b style='font-size:14px;'>${this.point.name}</b><br/>
-            <span style='color:#64748b;'>Active sensors:</span> <b>${this.point.y}</b>
+            <span style='color:#64748b;'>Active Monitors:</span> <b>${this.point.y}</b>
           </div>`;
         }"
       )
@@ -431,7 +431,7 @@ output$funding_priority_bubble <- highcharter::renderHighchart({
     ) %>%
     
     highcharter::hc_caption(
-      text = "Bubble size represents average data coverage. <br>Countries with high PM₂.₅ and limited sensor coverage may represent stronger opportunities for future monitoring investment.",
+      text = "Bubble size represents average data availability <br>Countries with high PM₂.₅ and limited sensor coverage may represent stronger opportunities for future monitoring investment.",
       align = "left",
       style = list(
         color = "#64748b",
@@ -444,7 +444,7 @@ output$funding_priority_bubble <- highcharter::renderHighchart({
       type = "logarithmic",
       
       title = list(
-        text = active_sensor_info_html("Active Sensors", axis = TRUE),
+        text = active_sensor_info_html("Active Monitors (logarithmic scale)", axis = TRUE),
         useHTML = TRUE,
         style = list(
           fontWeight = "700",
@@ -529,10 +529,10 @@ output$funding_priority_bubble <- highcharter::renderHighchart({
           return `
             <div style='font-family:Inter, Arial, sans-serif; font-size:12px; line-height:1.6;'>
               <b style='font-size:14px;'>${this.point.name}</b><br/>
-              <span style='color:#64748b;'>Active sensors:</span> <b>${this.point.Sensors}</b><br/>
+              <span style='color:#64748b;'>Active monitors:</span> <b>${this.point.Sensors}</b><br/>
               <span style='color:#64748b;'>Average PM₂.₅:</span> <b>${this.point.PM25} µg/m³</b><br/>
-              <span style='color:#64748b;'>Data coverage:</span> <b>${this.point.Coverage}%</b><br/>
-              <span style='color:#64748b;'>Awardees:</span> <b>${this.point.Awardees}</b><br/>
+              <span style='color:#64748b;'>Data Availability:</span> <b>${this.point.Coverage}%</b><br/>
+              <span style='color:#64748b;'>Awardees Name:</span> <b>${this.point.Awardees}</b><br/>
               <span style='color:#64748b;'>Reporting months:</span> <b>${this.point.Months}</b>
             </div>
           `;
