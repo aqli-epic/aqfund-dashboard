@@ -571,157 +571,157 @@ output$avg_aqi_id <- renderHighchart({
 # Country trend -> year states -> state districts
 # =========================================================
 
-output$annual_pm25_location_drilldown <- highcharter::renderHighchart({
-  
-  req(input$country_trd)
-  
-  state_selected <- isTRUE(input$use_state_aq) &&
-    has_value(input$state_trd)
-  
-  district_selected <- isTRUE(input$use_district_id_aq) &&
-    has_value(input$state_trd_aq) &&
-    has_value(input$district_trd_aq)
-  
-  # ---------------------------------------------------------
-  # DISTRICT LEVEL
-  # ---------------------------------------------------------
-  
-  if (district_selected) {
-    
-    raw_df <- get_district_aqli()
-    
-    title_text <- paste0(
-      "Annual <span style='color:maroon;'>",
-      input$country_trd,
-      " → ",
-      input$state_trd_aq,
-      " → ",
-      input$district_trd_aq,
-      "</span> PM<sub>2.5</sub> Concentration"
-    )
-    
-  } else if (state_selected) {
-    
-    # ---------------------------------------------------------
-    # STATE LEVEL
-    # ---------------------------------------------------------
-    
-    raw_df <- get_state_aqli()
-    
-    title_text <- paste0(
-      "Annual <span style='color:maroon;'>",
-      input$country_trd,
-      " → ",
-      input$state_trd_aq,
-      "</span> PM<sub>2.5</sub> Concentration"
-    )
-    
-  } else {
-    
-    # ---------------------------------------------------------
-    # DEFAULT COUNTRY LEVEL
-    # ---------------------------------------------------------
-    
-    raw_df <- get_country_aqli()
-    print("raw_df")
-    print(raw_df)
-    title_text <- paste0(
-      "Annual <span style='color:maroon;'>",
-      input$country_trd,
-      "</span> PM<sub>2.5</sub> Concentration"
-    )
-  }
-  
-  shiny::validate(
-    shiny::need(nrow(raw_df) > 0, "No annual data available for selected filters.")
-  )
-  
-  raw_df <- as.data.frame(raw_df)
-  
-  # ---------------------------------------------------------
-  # Standardize PM column
-  # ---------------------------------------------------------
-  
-  pm_col <- if ("pm25_avg" %in% names(raw_df)) {
-    "pm25_avg"
-  } else if ("pm25" %in% names(raw_df)) {
-    "pm25"
-  } else {
-    stop("No PM2.5 column found. Expected `pm25_avg` or `pm25`.")
-  }
-  
-  # ---------------------------------------------------------
-  # Year-wise aggregation
-  # ---------------------------------------------------------
-  
-  data_df <- raw_df %>%
-    dplyr::filter(!is.na(year)) %>%
-    dplyr::group_by(year) %>%
-    dplyr::summarise(
-      pm25_avg = mean(.data[[pm_col]], na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    dplyr::filter(!is.na(pm25_avg)) %>%
-    dplyr::arrange(year)
-  
-  shiny::validate(
-    shiny::need(nrow(data_df) > 0, "No annual data available after processing.")
-  )
-  
-  years <- data_df$year
-  
-  # ---------------------------------------------------------
-  # Highchart annual trend
-  # ---------------------------------------------------------
-  
-  highcharter::highchart() %>%
-    highcharter::hc_chart(
-      type = "spline",
-      backgroundColor = "transparent"
-    ) %>%
-    highcharter::hc_title(
-      text = title_text,
-      useHTML = TRUE
-    ) %>%
-    highcharter::hc_subtitle(
-      text = "(Ground Monitoring Data)",
-      useHTML = TRUE
-    ) %>%
-    highcharter::hc_xAxis(
-      categories = as.character(years),
-      title = list(text = "Year")
-    ) %>%
-    highcharter::hc_yAxis(
-      min = 0,
-      title = list(text = "PM₂.₅ (µg/m³)")
-    ) %>%
-    highcharter::hc_tooltip(
-      shared = TRUE,
-      crosshairs = TRUE,
-      valueDecimals = 1,
-      valueSuffix = " µg/m³"
-    ) %>%
-    highcharter::hc_legend(
-      enabled = FALSE
-    ) %>%
-    highcharter::hc_plotOptions(
-      spline = list(
-        marker = list(
-          enabled = TRUE,
-          radius = 4
-        ),
-        lineWidth = 2.5,
-        connectNulls = FALSE
-      )
-    ) %>%
-    highcharter::hc_add_series(
-      name = "Annual PM₂.₅",
-      data = data_df$pm25_avg,
-      type = "spline"
-    ) %>%
-    highcharter::hc_credits(enabled = FALSE)
-  
-})
+# output$annual_pm25_location_drilldown <- highcharter::renderHighchart({
+#   
+#   req(input$country_trd)
+#   
+#   state_selected <- isTRUE(input$use_state_aq) &&
+#     has_value(input$state_trd)
+#   
+#   district_selected <- isTRUE(input$use_district_id_aq) &&
+#     has_value(input$state_trd_aq) &&
+#     has_value(input$district_trd_aq)
+#   
+#   # ---------------------------------------------------------
+#   # DISTRICT LEVEL
+#   # ---------------------------------------------------------
+#   
+#   if (district_selected) {
+#     
+#     raw_df <- get_district_aqli()
+#     
+#     title_text <- paste0(
+#       "Annual <span style='color:maroon;'>",
+#       input$country_trd,
+#       " → ",
+#       input$state_trd_aq,
+#       " → ",
+#       input$district_trd_aq,
+#       "</span> PM<sub>2.5</sub> Concentration"
+#     )
+#     
+#   } else if (state_selected) {
+#     
+#     # ---------------------------------------------------------
+#     # STATE LEVEL
+#     # ---------------------------------------------------------
+#     
+#     raw_df <- get_state_aqli()
+#     
+#     title_text <- paste0(
+#       "Annual <span style='color:maroon;'>",
+#       input$country_trd,
+#       " → ",
+#       input$state_trd_aq,
+#       "</span> PM<sub>2.5</sub> Concentration"
+#     )
+#     
+#   } else {
+#     
+#     # ---------------------------------------------------------
+#     # DEFAULT COUNTRY LEVEL
+#     # ---------------------------------------------------------
+#     
+#     raw_df <- get_country_aqli()
+#     print("raw_df")
+#     print(raw_df)
+#     title_text <- paste0(
+#       "Annual <span style='color:maroon;'>",
+#       input$country_trd,
+#       "</span> PM<sub>2.5</sub> Concentration"
+#     )
+#   }
+#   
+#   shiny::validate(
+#     shiny::need(nrow(raw_df) > 0, "No annual data available for selected filters.")
+#   )
+#   
+#   raw_df <- as.data.frame(raw_df)
+#   
+#   # ---------------------------------------------------------
+#   # Standardize PM column
+#   # ---------------------------------------------------------
+#   
+#   pm_col <- if ("pm25_avg" %in% names(raw_df)) {
+#     "pm25_avg"
+#   } else if ("pm25" %in% names(raw_df)) {
+#     "pm25"
+#   } else {
+#     stop("No PM2.5 column found. Expected `pm25_avg` or `pm25`.")
+#   }
+#   
+#   # ---------------------------------------------------------
+#   # Year-wise aggregation
+#   # ---------------------------------------------------------
+#   
+#   data_df <- raw_df %>%
+#     dplyr::filter(!is.na(year)) %>%
+#     dplyr::group_by(year) %>%
+#     dplyr::summarise(
+#       pm25_avg = mean(.data[[pm_col]], na.rm = TRUE),
+#       .groups = "drop"
+#     ) %>%
+#     dplyr::filter(!is.na(pm25_avg)) %>%
+#     dplyr::arrange(year)
+#   
+#   shiny::validate(
+#     shiny::need(nrow(data_df) > 0, "No annual data available after processing.")
+#   )
+#   
+#   years <- data_df$year
+#   
+#   # ---------------------------------------------------------
+#   # Highchart annual trend
+#   # ---------------------------------------------------------
+#   
+#   highcharter::highchart() %>%
+#     highcharter::hc_chart(
+#       type = "spline",
+#       backgroundColor = "transparent"
+#     ) %>%
+#     highcharter::hc_title(
+#       text = title_text,
+#       useHTML = TRUE
+#     ) %>%
+#     highcharter::hc_subtitle(
+#       text = "(Ground Monitoring Data)",
+#       useHTML = TRUE
+#     ) %>%
+#     highcharter::hc_xAxis(
+#       categories = as.character(years),
+#       title = list(text = "Year")
+#     ) %>%
+#     highcharter::hc_yAxis(
+#       min = 0,
+#       title = list(text = "PM₂.₅ (µg/m³)")
+#     ) %>%
+#     highcharter::hc_tooltip(
+#       shared = TRUE,
+#       crosshairs = TRUE,
+#       valueDecimals = 1,
+#       valueSuffix = " µg/m³"
+#     ) %>%
+#     highcharter::hc_legend(
+#       enabled = FALSE
+#     ) %>%
+#     highcharter::hc_plotOptions(
+#       spline = list(
+#         marker = list(
+#           enabled = TRUE,
+#           radius = 4
+#         ),
+#         lineWidth = 2.5,
+#         connectNulls = FALSE
+#       )
+#     ) %>%
+#     highcharter::hc_add_series(
+#       name = "Annual PM₂.₅",
+#       data = data_df$pm25_avg,
+#       type = "spline"
+#     ) %>%
+#     highcharter::hc_credits(enabled = FALSE)
+#   
+# })
 
 # 
 # trend_weighted_pm <- function(value, weight) {

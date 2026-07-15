@@ -216,6 +216,7 @@ openaq_trend_d <- sensor_data %>% group_by(name0,name1, name2, year) %>% summari
   filter(year %in% c(2025, 2026)) 
 
 aqli_gadm2_narrow <- read_csv("./data/gadm2_2024_narrow_aqf.csv")
+
 # 
 # 
 # data_long <- aqli_gadm2_narrow %>%
@@ -267,31 +268,57 @@ aqli_gadm2_narrow <- read_csv("./data/gadm2_2024_narrow_aqf.csv")
 # write_csv(aqli_gadm2_narrow, "./data/gadm2_2024_narrow_aqf.csv")
 who_std <- aqli_gadm2_narrow %>% select(name0, name1,name2, population,whostandard, natstandard) %>% unique()
 
+aqli_stan <- read_csv("./data/gadm0_std_nat.csv")
+
+aqli_stan <- aqli_stan %>% select(country, natstandard) %>% unique()
+
+who_std <- who_std %>%
+  select(-natstandard) %>%
+  left_join(aqli_stan, by = c("name0" = "country"))
+#write_csv(aqli_stan, "./data/gadm0_std_nat.csv")
 
 openaq_trend_bal <- left_join(openaq_trend_d, who_std, by = c("name0" = "name0", "name1" = "name1", "name2" = "name2"))
 
-openaq_trend_bal <- openaq_trend_bal %>% select("name0", "name1", "name2", "population", "whostandard", "natstandard", "year", 
-       "pm25"   )
+openaq_trend_bal <- openaq_trend_bal %>% select("name0", "name1", "name2", "population", "whostandard", "natstandard", "year", "pm25"   )
 
-final_data <- bind_rows(openaq_trend_bal,aqli_gadm2_narrow)
+final_data <- bind_rows(openaq_trend_bal, aqli_gadm2_narrow)
 
-# final_data_country_lvl <-final_data %>% group_by(name0,whostandard,natstandard, year) %>% summarise(tot = sum(population, na.rm = T),
+# final_data_country_lvl <- final_data %>% group_by(name0,whostandard,natstandard, year) %>% summarise(tot = sum(population, na.rm = T),
 #                                                                                         pm25 = round(mean(pm25, na.rm=T),2),
 #                                                                                         pm_aqli = round(mean(pm_aqli, na.rm=T),2))
 
 
 
+# final_data_country_lvl <- final_data %>%
+#   group_by(name0, whostandard, natstandard, year) %>%
+#   summarise(
+#     tot = sum(population, na.rm = TRUE),
+#     pm25 = round(
+#       weighted.mean(pm25, w = population, na.rm = TRUE),
+#       2
+#     ),
+#     pm_aqli = round(mean(pm_aqli, na.rm=T),2),
+#     .groups = "drop"
+#   ) %>% filter(!is.na(whostandard))
+
 final_data_country_lvl <- final_data %>%
   group_by(name0, whostandard, natstandard, year) %>%
   summarise(
     tot = sum(population, na.rm = TRUE),
-    pm25 = round(
-      weighted.mean(pm25, w = population, na.rm = TRUE),
+    pm_aqli = round(
+      sum(pm_aqli * population, na.rm = TRUE) /
+        sum(population[!is.na(pm_aqli)], na.rm = TRUE),
       2
     ),
-    pm_aqli = round(mean(pm_aqli, na.rm=T),2),
+    pm25 = round(mean(pm25, na.rm = TRUE), 2),
     .groups = "drop"
-  ) %>% filter(!is.na(whostandard))
+  ) %>%
+  filter(!is.na(whostandard))
+
+
+final_data_country_lvl <- final_data_country_lvl %>%
+  select(-natstandard) %>%
+  left_join(aqli_stan, by = c("name0" = "country"))
 
 final_data_country_lvl <- as.data.table(final_data_country_lvl)
 
@@ -302,11 +329,11 @@ final_data_country_name2_lvl <- final_data %>%
   group_by(name0, name1, name2, whostandard, natstandard, year) %>%
   summarise(
     tot = sum(population, na.rm = TRUE),
-    pm25 = round(
-      weighted.mean(pm25, w = population, na.rm = TRUE),
+    pm_aqli = round(
+      weighted.mean(pm_aqli, w = population, na.rm = TRUE),
       2
     ),
-    pm_aqli = round(mean(pm_aqli, na.rm=T),2),
+    pm25 = round(mean(pm25, na.rm=T),2),
     .groups = "drop"
   ) %>% filter(!is.na(whostandard))
 
@@ -339,6 +366,7 @@ setcolorder(
   final_data_country_name2_lvl,
   c("name0", "name1", "name2", "whostandard", "natstandard", "year", "tot", "pm25")
 )
+
 # =========================================================
 # Reactable Drilldown
 # Country -> State -> District

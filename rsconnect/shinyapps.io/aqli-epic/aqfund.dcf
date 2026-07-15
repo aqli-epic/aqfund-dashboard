@@ -1,0 +1,12 @@
+name: aqfund
+title: aqfund
+username: aqli-epic
+account: aqli-epic
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17542264
+bundleId: 12270277
+url: https://aqli-epic.shinyapps.io/aqfund/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
