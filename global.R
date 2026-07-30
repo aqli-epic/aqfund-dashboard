@@ -93,6 +93,7 @@ source(file.path("helperfunction", "reactable_helper.R"))
 
 openaq_data <- as.data.table(read_csv("./data/AQfund_data_distt.csv"))
 openaq_data <- openaq_data %>% filter(name0!="Nicaragua")
+
 openaq_data$name1[openaq_data$name0 == "Nepal" & openaq_data$name1 == "Province 1"] <- "Koshi"
 
 openaq_data <- openaq_data %>% filter(year %in% c(2025,2026))
@@ -125,12 +126,14 @@ target_countries <- c( "Uganda", "Cameroon","Nigeria", "Nepal", "Ghana", "Bhutan
                        "Democratic Republic of the Congo", "Gambia", "Argentina")
 
 
-aqli_gadm1   <- read_csv("./data/gadm1_2024_wide.csv")
+aqli_gadm1   <- read_csv("./data/gadm1_weighted_pm25.csv")
 aqli_gadm1 <- aqli_gadm1 %>% filter(country %in% target_countries)
+
+aqli_continent_region <- aqli_gadm1 %>% select(continent, region, country) %>% unique()
 
 #aqli_gadm1$name_1[aqli_gadm1$country == "Nepal" & aqli_gadm1$name_1 == "Province 1"] <- "Koshi"
 
-aqli_gadm2   <- read_csv("./data/gadm2_2024_wide.csv")
+aqli_gadm2   <- read_csv("./data/gadm2_weighted_pm25.csv")
 aqli_gadm2 <- aqli_gadm2 %>% filter(country %in% target_countries)
 
 #aqli_gadm2$name_1[aqli_gadm2$country == "Nepal" & aqli_gadm2$name_1 == "Province 1"] <- "Koshi"
@@ -215,7 +218,7 @@ district_data_heatmap$name0[district_data_heatmap$name0 == "Democratic Republic 
 openaq_trend_d <- sensor_data %>% group_by(name0,name1, name2, year) %>% summarise(pm25 = round(mean(pm25, na.rm=T),2)) %>% 
   filter(year %in% c(2025, 2026)) 
 
-aqli_gadm2_narrow <- read_csv("./data/gadm2_2024_narrow_aqf.csv")
+aqli_gadm2_narrow <- read_csv("./data/gadm2_2024_narrow_pm25.csv")
 
 # 
 # 
