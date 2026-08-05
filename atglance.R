@@ -330,164 +330,216 @@ output$active_sensor_drilldown <- highcharter::renderHighchart({
 # =========================================================
 output$funding_priority_bubble <- highcharter::renderHighchart({
   
-  dt <- data.table::as.data.table(sensor_data)
+  shiny::req(input$year_heatmp)
   
-  dt <- dt[
-    year %in% c(2025, 2026)
+  dt <- data.table::as.data.table(sensor_data)[
+    year %in% c(2025, 2026) &
+      year %in% input$year_heatmp
   ]
   
-  dt <- dt[
-    year %in% input$year_heatmp
-  ]
+  safe_mean <- function(x, digits = 1) {
+    
+    x <- x[is.finite(x)]
+    
+    if (length(x) == 0) {
+      return(NA_real_)
+    }
+    
+    round(mean(x), digits)
+  }
   
   priority_df <- dt[
-    ,
+    !is.na(name0),
     .(
-      Sensors = data.table::uniqueN(sensors_id),
-      Awardees = data.table::uniqueN(owner),
-      Months = data.table::uniqueN(paste(year, month)),
-      Coverage = round(mean(coverage.percentComplete, na.rm = TRUE), 1),
-      PM25 = round(mean(pm25, na.rm = TRUE), 2)
+      Sensors = data.table::uniqueN(
+        sensors_id[!is.na(sensors_id)]
+      ),
+      
+      Awardees = data.table::uniqueN(
+        owner[!is.na(owner)]
+      ),
+      
+      Months = data.table::uniqueN(
+        paste(
+          year,
+          sprintf("%02d", month),
+          sep = "-"
+        )
+      ),
+      
+      Coverage = safe_mean(
+        coverage.percentComplete,
+        digits = 1
+      ),
+      
+      PM25 = safe_mean(
+        pm25,
+        digits = 1
+      )
     ),
-    by = .(Country = name0)
+    by = .(
+      Country = name0
+    )
   ]
   
   priority_df <- priority_df[
     !is.na(Country) &
-      !is.na(Sensors) &
       Sensors > 0 &
-      !is.na(PM25)
-  ]
+      is.finite(PM25)
+  ][order(-PM25)]
   
   shiny::validate(
     shiny::need(
       nrow(priority_df) > 0,
-      "No funding priority data available for selected filters."
+      "No funding-priority data available for the selected filters."
     )
+  )
+  
+  # ---------------------------------------------------------
+  # Monitoring categories
+  # ---------------------------------------------------------
+  
+  priority_df[
+    ,
+    MonitoringLevel := data.table::fcase(
+      Sensors <= 10,
+      "Limited monitoring: 1–10",
+      
+      Sensors <= 25,
+      "Moderate monitoring: 11–25",
+      
+      default = "Broader monitoring: 26+"
+    )
+  ]
+  
+  monitoring_levels <- c(
+    "Limited monitoring: 1–10",
+    "Moderate monitoring: 11–25",
+    "Broader monitoring: 26+"
+  )
+  
+  monitoring_colours <- c(
+    "Limited monitoring: 1–10" = "#D97706",
+    "Moderate monitoring: 11–25" = "#F2B01E",
+    "Broader monitoring: 26+" = "#2878B5"
+  )
+  
+  # Highest pollution first
+  data.table::setorder(
+    priority_df,
+    -PM25,
+    Sensors,
+    Country
   )
   
   priority_df[
     ,
-    `:=`(
-      x = Sensors,
-      y = PM25,
-      z = pmax(Coverage, 40),
-      name = Country,
-      color = vapply(PM25, aqli_pm_color, character(1))
-    )
+    row_position := .I - 1L
   ]
   
-  # ---------------------------------------------------------
-  # X-axis padding for logarithmic axis
-  # ---------------------------------------------------------
+  country_categories <- priority_df$Country
   
-  min_sensors <- min(priority_df$Sensors, na.rm = TRUE)
-  max_sensors <- max(priority_df$Sensors, na.rm = TRUE)
-  
-  x_min <- max(0.5, min_sensors / 1.6)
-  x_max <- max_sensors * 1.25
-  
-  bubble_data <- highcharter::list_parse(
-    priority_df[
-      ,
-      .(
-        x,
-        y,
-        z,
-        name,
-        color,
-        Sensors,
-        Awardees,
-        Months,
-        Coverage,
-        PM25
-      )
-    ]
+  chart_height <- max(
+    520,
+    250 + nrow(priority_df) * 34
   )
   
-  highcharter::highchart() %>%
+  y_max <- ceiling(
+    max(priority_df$PM25, na.rm = TRUE) * 1.28 / 10
+  ) * 10
+  
+  # ---------------------------------------------------------
+  # Base chart
+  # ---------------------------------------------------------
+  
+  hc <- highcharter::highchart() %>%
     
     highcharter::hc_chart(
-      type = "bubble",
-      zoomType = "xy",
-      height = 470,
-      spacingBottom = 20,
+      type = "bar",
+      height = chart_height,
       spacingTop = 18,
-      spacingRight = 24,
-      spacingLeft = 10,
+      spacingBottom = 18,
+      marginTop = 95,
+      marginBottom = 125,
+      marginLeft = 215,
+      marginRight = 150,
+      
       style = list(
         fontFamily = "Montserrat, Arial, sans-serif"
       )
     ) %>%
     
     highcharter::hc_title(
-      text = "Funding Priority Matrix",
+      text = "PM₂.₅ and Active Monitoring by Country",
       align = "center",
+      margin = 12,
+      
       style = list(
-        fontWeight = "500",
         color = "#111827",
-        fontSize = "18px"
+        fontSize = "19px",
+        fontWeight = "500"
       )
     ) %>%
     
-    highcharter::hc_caption(
-      text = "Bubble size represents average data availability <br>Countries with high PM₂.₅ and limited sensor coverage may represent stronger opportunities for future monitoring investment.",
-      align = "left",
+    highcharter::hc_subtitle(
+      text = paste0(
+        "Countries are ranked by average PM₂.₅ concentration. ",
+        "Colour indicates the number of active monitors."
+      ),
+      align = "center",
+      
       style = list(
-        color = "#64748b",
-        fontSize = "13px",
-        fontFamily = "Montserrat, Arial, sans-serif"
+        color = "#64748B",
+        fontSize = "12px"
       )
     ) %>%
     
     highcharter::hc_xAxis(
-      type = "logarithmic",
+      categories = country_categories,
+      reversed = TRUE,
       
       title = list(
-        text = active_sensor_info_html("Active Monitors (logarithmic scale)", axis = TRUE),
-        useHTML = TRUE,
-        style = list(
-          fontWeight = "700",
-          color = "#374151"
-        )
+        text = ""
       ),
       
-      min = x_min,
-      max = x_max,
-      
-      startOnTick = FALSE,
-      endOnTick = FALSE,
-      minPadding = 0.08,
-      maxPadding = 0.12,
-      
-      gridLineWidth = 1,
-      gridLineColor = "#eef2f7",
+      lineWidth = 0,
+      tickWidth = 0,
       
       labels = list(
+        useHTML = TRUE,
+        
         style = list(
-          color = "#334155"
+          color = "#1F2937",
+          fontSize = "12px",
+          fontWeight = "500",
+          width = "185px",
+          textOverflow = "none",
+          whiteSpace = "normal"
         )
       )
     ) %>%
     
     highcharter::hc_yAxis(
+      min = 0,
+      max = y_max,
+      
       title = list(
-        text = "Average PM₂.₅ (µg/m³)",
+        text = "Average PM₂.₅ concentration (µg/m³)",
+        
         style = list(
-          fontWeight = "700",
-          color = "#374151"
+          color = "#374151",
+          fontSize = "12px",
+          fontWeight = "700"
         )
       ),
       
-      min = 0,
-      maxPadding = 0.15,
-      
       gridLineWidth = 1,
-      gridLineColor = "#eef2f7",
+      gridLineColor = "#E9EEF4",
       
       labels = list(
         style = list(
-          color = "#334155"
+          color = "#475569",
+          fontSize = "11px"
         )
       ),
       
@@ -497,15 +549,18 @@ output$funding_priority_bubble <- highcharter::renderHighchart({
           color = "#111827",
           dashStyle = "ShortDash",
           width = 1.2,
-          zIndex = 4,
+          zIndex = 5,
+          
           label = list(
-            text = "WHO guideline: 5 µg/m³",
-            align = "right",
-            x = -4,
-            y = -6,
+            text = "WHO guideline: 5",
+            rotation = 0,
+            align = "left",
+            x = 5,
+            y = -8,
+            
             style = list(
               color = "#111827",
-              fontSize = "11px",
+              fontSize = "10px",
               fontWeight = "700"
             )
           )
@@ -513,27 +568,134 @@ output$funding_priority_bubble <- highcharter::renderHighchart({
       )
     ) %>%
     
-    highcharter::hc_add_series(
-      data = bubble_data,
-      name = "Countries",
-      type = "bubble",
-      minSize = 22,
-      maxSize = 58
-    ) %>%
+    highcharter::hc_caption(
+      text = paste0(
+        "High PM₂.₅ combined with a limited number of active monitors ",
+        "may indicate a stronger case for further assessment and monitoring investment."
+      ),
+      align = "left",
+      
+      style = list(
+        color = "#64748B",
+        fontSize = "11px"
+      )
+    )
+  
+  # ---------------------------------------------------------
+  # Add one bar series for each monitoring category
+  # ---------------------------------------------------------
+  
+  for (level in monitoring_levels) {
+    
+    level_df <- priority_df[
+      MonitoringLevel == level
+    ]
+    
+    if (nrow(level_df) == 0) {
+      next
+    }
+    
+    series_data <- highcharter::list_parse(
+      level_df[
+        ,
+        .(
+          x = row_position,
+          y = PM25,
+          name = Country,
+          Sensors,
+          Awardees,
+          Months,
+          Coverage,
+          PM25,
+          MonitoringLevel
+        )
+      ]
+    )
+    
+    hc <- hc %>%
+      
+      highcharter::hc_add_series(
+        data = series_data,
+        type = "bar",
+        name = level,
+        color = unname(monitoring_colours[level])
+      )
+  }
+  
+  hc %>%
     
     highcharter::hc_tooltip(
       useHTML = TRUE,
+      
       formatter = highcharter::JS(
         "
         function () {
+
+          const coverage =
+            this.point.Coverage === null ||
+            this.point.Coverage === undefined ||
+            !isFinite(this.point.Coverage)
+              ? 'Not available'
+              : Highcharts.numberFormat(
+                  this.point.Coverage,
+                  1
+                ) + '%';
+
           return `
-            <div style='font-family:Inter, Arial, sans-serif; font-size:12px; line-height:1.6;'>
-              <b style='font-size:14px;'>${this.point.name}</b><br/>
-              <span style='color:#64748b;'>Active monitors:</span> <b>${this.point.Sensors}</b><br/>
-              <span style='color:#64748b;'>Average PM₂.₅:</span> <b>${this.point.PM25} µg/m³</b><br/>
-              <span style='color:#64748b;'>Data Availability:</span> <b>${this.point.Coverage}%</b><br/>
-              <span style='color:#64748b;'>Awardees Name:</span> <b>${this.point.Awardees}</b><br/>
-              <span style='color:#64748b;'>Reporting months:</span> <b>${this.point.Months}</b>
+            <div style='
+              min-width: 205px;
+              font-family: Inter, Arial, sans-serif;
+              font-size: 12px;
+              line-height: 1.65;
+            '>
+
+              <div style='
+                font-size: 14px;
+                font-weight: 700;
+                margin-bottom: 5px;
+                color: #111827;
+              '>
+                ${this.point.name}
+              </div>
+
+              <span style='color:#64748B;'>
+                Average PM₂.₅:
+              </span>
+              <b>
+                ${Highcharts.numberFormat(
+                  this.point.PM25,
+                  1
+                )} µg/m³
+              </b>
+
+              <br/>
+
+              <span style='color:#64748B;'>
+                Active monitors:
+              </span>
+              <b>${this.point.Sensors}</b>
+
+              <br/>
+
+              <span style='color:#64748B;'>
+                Data availability:
+              </span>
+              <b>${coverage}</b>
+
+              <br/>
+
+              <span style='color:#64748B;'>
+                Awardees/owners:
+              </span>
+              <b>${this.point.Awardees}</b>
+
+              <br/>
+
+              <span style='color:#64748B;'>
+                Reporting months:
+              </span>
+              <b>${this.point.Months}</b>
+
             </div>
           `;
         }
@@ -542,22 +704,150 @@ output$funding_priority_bubble <- highcharter::renderHighchart({
     ) %>%
     
     highcharter::hc_plotOptions(
-      bubble = list(
-        marker = list(
-          lineColor = "#ffffff",
-          lineWidth = 2,
-          fillOpacity = 0.9
+      bar = list(
+        grouping = FALSE,
+        pointWidth = 16,
+        borderWidth = 0,
+        borderRadius = 3,
+        
+        dataLabels = list(
+          enabled = TRUE,
+          inside = FALSE,
+          align = "left",
+          x = 7,
+          crop = FALSE,
+          overflow = "allow",
+          
+          formatter = highcharter::JS(
+            "
+            function () {
+              return (
+                Highcharts.numberFormat(
+                  this.point.PM25,
+                  1
+                ) +
+                '  ·  ' +
+                this.point.Sensors +
+                ' monitors'
+              );
+            }
+            "
+          ),
+          
+          style = list(
+            color = "#475569",
+            fontSize = "10px",
+            fontWeight = "500",
+            textOutline = "none"
+          )
         )
       ),
+      
       series = list(
-        dataLabels = list(
-          enabled = FALSE
+        animation = list(
+          duration = 350
+        ),
+        
+        states = list(
+          inactive = list(
+            opacity = 0.3
+          )
         )
       )
     ) %>%
     
-    highcharter::hc_legend(
-      enabled = FALSE
+    # ---------------------------------------------------------
+  # Bottom horizontally distributed legend
+  # ---------------------------------------------------------
+  
+  highcharter::hc_legend(
+    enabled = TRUE,
+    
+    layout = "horizontal",
+    align = "center",
+    verticalAlign = "bottom",
+    
+    width = "90%",
+    x = 0,
+    y = 8,
+    
+    floating = FALSE,
+    
+    itemWidth = 220,
+    itemDistance = 0,
+    
+    symbolRadius = 4,
+    symbolHeight = 10,
+    symbolWidth = 10,
+    symbolPadding = 7,
+    
+    padding = 0,
+    margin = 12,
+    
+    itemStyle = list(
+      color = "#475569",
+      fontSize = "10px",
+      fontWeight = "500"
+    ),
+    
+    itemHoverStyle = list(
+      color = "#111827"
+    )
+  ) %>%
+    
+    highcharter::hc_responsive(
+      rules = list(
+        list(
+          condition = list(
+            maxWidth = 720
+          ),
+          
+          chartOptions = list(
+            chart = list(
+              marginLeft = 125,
+              marginRight = 25,
+              marginTop = 115,
+              marginBottom = 145
+            ),
+            
+            subtitle = list(
+              style = list(
+                fontSize = "10px"
+              )
+            ),
+            
+            xAxis = list(
+              labels = list(
+                style = list(
+                  width = "105px",
+                  fontSize = "10px"
+                )
+              )
+            ),
+            
+            plotOptions = list(
+              bar = list(
+                pointWidth = 13,
+                
+                dataLabels = list(
+                  enabled = FALSE
+                )
+              )
+            ),
+            
+            legend = list(
+              layout = "horizontal",
+              align = "center",
+              verticalAlign = "bottom",
+              width = "100%",
+              x = 0,
+              y = 5,
+              itemWidth = 165,
+              itemDistance = 0
+            )
+          )
+        )
+      )
     ) %>%
     
     highcharter::hc_credits(
@@ -568,6 +858,247 @@ output$funding_priority_bubble <- highcharter::renderHighchart({
       enabled = TRUE
     )
 })
+
+# output$funding_priority_bubble <- highcharter::renderHighchart({
+#   
+#   dt <- data.table::as.data.table(sensor_data)
+#   
+#   dt <- dt[
+#     year %in% c(2025, 2026)
+#   ]
+#   
+#   dt <- dt[
+#     year %in% input$year_heatmp
+#   ]
+#   
+#   priority_df <- dt[
+#     ,
+#     .(
+#       Sensors = data.table::uniqueN(sensors_id),
+#       Awardees = data.table::uniqueN(owner),
+#       Months = data.table::uniqueN(paste(year, month)),
+#       Coverage = round(mean(coverage.percentComplete, na.rm = TRUE), 1),
+#       PM25 = round(mean(pm25, na.rm = TRUE), 2)
+#     ),
+#     by = .(Country = name0)
+#   ]
+#   
+#   priority_df <- priority_df[
+#     !is.na(Country) &
+#       !is.na(Sensors) &
+#       Sensors > 0 &
+#       !is.na(PM25)
+#   ]
+#   
+#   shiny::validate(
+#     shiny::need(
+#       nrow(priority_df) > 0,
+#       "No funding priority data available for selected filters."
+#     )
+#   )
+#   
+#   priority_df[
+#     ,
+#     `:=`(
+#       x = Sensors,
+#       y = PM25,
+#       z = pmax(Coverage, 40),
+#       name = Country,
+#       color = vapply(PM25, aqli_pm_color, character(1))
+#     )
+#   ]
+#   
+#   # ---------------------------------------------------------
+#   # X-axis padding for logarithmic axis
+#   # ---------------------------------------------------------
+#   
+#   min_sensors <- min(priority_df$Sensors, na.rm = TRUE)
+#   max_sensors <- max(priority_df$Sensors, na.rm = TRUE)
+#   
+#   x_min <- max(0.5, min_sensors / 1.6)
+#   x_max <- max_sensors * 1.25
+#   
+#   bubble_data <- highcharter::list_parse(
+#     priority_df[
+#       ,
+#       .(
+#         x,
+#         y,
+#         z,
+#         name,
+#         color,
+#         Sensors,
+#         Awardees,
+#         Months,
+#         Coverage,
+#         PM25
+#       )
+#     ]
+#   )
+#   
+#   highcharter::highchart() %>%
+#     
+#     highcharter::hc_chart(
+#       type = "bubble",
+#       zoomType = "xy",
+#       height = 470,
+#       spacingBottom = 20,
+#       spacingTop = 18,
+#       spacingRight = 24,
+#       spacingLeft = 10,
+#       style = list(
+#         fontFamily = "Montserrat, Arial, sans-serif"
+#       )
+#     ) %>%
+#     
+#     highcharter::hc_title(
+#       text = "Funding Priority Matrix",
+#       align = "center",
+#       style = list(
+#         fontWeight = "500",
+#         color = "#111827",
+#         fontSize = "18px"
+#       )
+#     ) %>%
+#     
+#     highcharter::hc_caption(
+#       text = "Bubble size represents average data availability <br>Countries with high PM₂.₅ and limited sensor coverage may represent stronger opportunities for future monitoring investment.",
+#       align = "left",
+#       style = list(
+#         color = "#64748b",
+#         fontSize = "13px",
+#         fontFamily = "Montserrat, Arial, sans-serif"
+#       )
+#     ) %>%
+#     
+#     highcharter::hc_xAxis(
+#       type = "logarithmic",
+#       
+#       title = list(
+#         text = active_sensor_info_html("Active Monitors (logarithmic scale)", axis = TRUE),
+#         useHTML = TRUE,
+#         style = list(
+#           fontWeight = "700",
+#           color = "#374151"
+#         )
+#       ),
+#       
+#       min = x_min,
+#       max = x_max,
+#       
+#       startOnTick = FALSE,
+#       endOnTick = FALSE,
+#       minPadding = 0.08,
+#       maxPadding = 0.12,
+#       
+#       gridLineWidth = 1,
+#       gridLineColor = "#eef2f7",
+#       
+#       labels = list(
+#         style = list(
+#           color = "#334155"
+#         )
+#       )
+#     ) %>%
+#     
+#     highcharter::hc_yAxis(
+#       title = list(
+#         text = "Average PM₂.₅ (µg/m³)",
+#         style = list(
+#           fontWeight = "700",
+#           color = "#374151"
+#         )
+#       ),
+#       
+#       min = 0,
+#       maxPadding = 0.15,
+#       
+#       gridLineWidth = 1,
+#       gridLineColor = "#eef2f7",
+#       
+#       labels = list(
+#         style = list(
+#           color = "#334155"
+#         )
+#       ),
+#       
+#       plotLines = list(
+#         list(
+#           value = 5,
+#           color = "#111827",
+#           dashStyle = "ShortDash",
+#           width = 1.2,
+#           zIndex = 4,
+#           label = list(
+#             text = "WHO guideline: 5 µg/m³",
+#             align = "right",
+#             x = -4,
+#             y = -6,
+#             style = list(
+#               color = "#111827",
+#               fontSize = "11px",
+#               fontWeight = "700"
+#             )
+#           )
+#         )
+#       )
+#     ) %>%
+#     
+#     highcharter::hc_add_series(
+#       data = bubble_data,
+#       name = "Countries",
+#       type = "bubble",
+#       minSize = 22,
+#       maxSize = 58
+#     ) %>%
+#     
+#     highcharter::hc_tooltip(
+#       useHTML = TRUE,
+#       formatter = highcharter::JS(
+#         "
+#         function () {
+#           return `
+#             <div style='font-family:Inter, Arial, sans-serif; font-size:12px; line-height:1.6;'>
+#               <b style='font-size:14px;'>${this.point.name}</b><br/>
+#               <span style='color:#64748b;'>Active monitors:</span> <b>${this.point.Sensors}</b><br/>
+#               <span style='color:#64748b;'>Average PM₂.₅:</span> <b>${this.point.PM25} µg/m³</b><br/>
+#               <span style='color:#64748b;'>Data Availability:</span> <b>${this.point.Coverage}%</b><br/>
+#               <span style='color:#64748b;'>Awardees Name:</span> <b>${this.point.Awardees}</b><br/>
+#               <span style='color:#64748b;'>Reporting months:</span> <b>${this.point.Months}</b>
+#             </div>
+#           `;
+#         }
+#         "
+#       )
+#     ) %>%
+#     
+#     highcharter::hc_plotOptions(
+#       bubble = list(
+#         marker = list(
+#           lineColor = "#ffffff",
+#           lineWidth = 2,
+#           fillOpacity = 0.9
+#         )
+#       ),
+#       series = list(
+#         dataLabels = list(
+#           enabled = FALSE
+#         )
+#       )
+#     ) %>%
+#     
+#     highcharter::hc_legend(
+#       enabled = FALSE
+#     ) %>%
+#     
+#     highcharter::hc_credits(
+#       enabled = FALSE
+#     ) %>%
+#     
+#     highcharter::hc_exporting(
+#       enabled = TRUE
+#     )
+# })
 # output$funding_priority_bubble <- highcharter::renderHighchart({
 #   
 #   dt <- data.table::as.data.table(sensor_data)

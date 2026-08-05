@@ -1113,7 +1113,7 @@ br(),
         column(
           width = 6,
           wellPanel(
-            highcharter::highchartOutput("funding_priority_bubble", height = "480px")
+            highcharter::highchartOutput("funding_priority_bubble", height = "auto")
           )
         ),
 
@@ -1135,17 +1135,18 @@ br(),
       ),
       br(),
 br(),
-      fluidRow(
-        column(
-          width = 6,
-          wellPanel(
-            highcharter::highchartOutput(
-              "active_sensor_drilldown",
-              height = "540px"
-            )
-          )
-        )
-      ),
+br(),
+      # fluidRow(
+      #   column(
+      #     width = 6,
+      #     wellPanel(
+      #       highcharter::highchartOutput(
+      #         "active_sensor_drilldown",
+      #         height = "540px"
+      #       )
+      #     )
+      #   )
+      # ),
       
       br()
       
