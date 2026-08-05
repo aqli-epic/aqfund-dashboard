@@ -1,0 +1,158 @@
+gadm_long <- gadm0_aqli %>% select(country, population,starts_with("pm")) %>% 
+  pivot_longer(
+    cols = starts_with("pm"),
+    names_to = "year",
+    values_to = "pm25"
+  ) %>%
+  mutate(
+    year = as.numeric(str_extract(year, "\\d+"))
+  )
+
+
+eu_countries <- c(
+  "Germany","France","Italy","Spain","Poland",
+  "Netherlands","Belgium","Sweden","Austria",
+  "Ireland","Denmark","Finland","Portugal",
+  "Greece","Czech Republic","Hungary",
+  "Romania","Bulgaria","Slovakia","Croatia",
+  "Slovenia","Lithuania","Latvia","Estonia",
+  "Luxembourg","Malta","Cyprus"
+)
+freeze_countries <- c("China", "United States", eu_countries)
+
+gadm_cf <- gadm_long %>%
+  group_by(country) %>%
+  mutate(
+    pm2014_value = pm25[year == 2014][1]
+  ) %>%
+  ungroup() %>%
+  mutate(
+    pm25_cf = ifelse(
+      country %in% freeze_countries & year >= 2014 & year <= 2020,
+      pm2014_value,
+      pm25
+    )
+  )
+
+global_actual <- gadm_cf %>%
+  filter(year %in% c(2014, 2020)) %>%
+  group_by(year) %>%
+  summarise(
+    global_pm = sum(pm25 * population, na.rm = TRUE) /
+      sum(population, na.rm = TRUE)
+  )
+
+global_cf <- gadm_cf %>%
+  filter(year %in% c(2014, 2020)) %>%
+  group_by(year) %>%
+  summarise(
+    global_pm_cf = sum(pm25_cf * population, na.rm = TRUE) /
+      sum(population, na.rm = TRUE)
+  )
+
+actual_change <- global_actual %>%
+  summarise(
+    pct_change = (global_pm[year == 2020] -
+                    global_pm[year == 2015]) /
+      global_pm[year == 2015] * 100
+  )
+
+
+cf_change <- global_cf %>%
+  summarise(
+    pct_change_cf = (global_pm_cf[year == 2020] -
+                       global_pm_cf[year == 2015]) /
+      global_pm_cf[year == 2015] * 100
+  )
+
+##################################### GADM2 Data ###########################################
+
+library(dplyr)
+library(tidyr)
+library(stringr)
+
+gadm2_long <- gadm2_aqli %>%
+  select(region,country, name_1, name_2, population, starts_with("pm")) %>%
+  pivot_longer(
+    cols = starts_with("pm"),
+    names_to = "year",
+    values_to = "pm25"
+  ) %>%
+  mutate(
+    year = as.numeric(str_extract(year, "\\d+"))
+  )
+
+mena_latin_america <- gadm0_aqli %>%  filter(region %in% c("Middle East and North Africa", "Latin America" )) %>% pull(country) %>% unique()
+
+eu_countries <- c(
+  "Germany","France","Italy","Spain","Poland",
+  "Netherlands","Belgium","Sweden","Austria",
+  "Ireland","Denmark","Finland","Portugal",
+  "Greece","Czech Republic","Hungary",
+  "Romania","Bulgaria","Slovakia","Croatia",
+  "Slovenia","Lithuania","Latvia","Estonia",
+  "Luxembourg","Malta","Cyprus"
+)
+
+freeze_countries <- c("China")#, "United States", eu_countries)
+
+freeze_countries <- mena_latin_america
+
+gadm2_cf <- gadm2_long %>%
+  group_by(country, name_1, name_2) %>%
+  mutate(
+    pm2014_value = pm25[year == 2014][1]
+  ) %>%
+  ungroup() %>%
+  mutate(
+    pm25_cf = ifelse(
+      country %in% freeze_countries &
+        year >= 2015 & year <= 2020,
+      pm2014_value,
+      pm25
+    )
+  )
+
+
+global_actual <- gadm2_cf %>%
+  filter(year %in% c(2015, 2020)) %>%
+  group_by(year) %>%
+  summarise(
+    global_pm = sum(pm25 * population, na.rm = TRUE) /
+      sum(population, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+global_cf <- gadm2_cf %>%
+  filter(year %in% c(2015, 2020)) %>%
+  group_by(year) %>%
+  summarise(
+    global_pm_cf = sum(pm25_cf * population, na.rm = TRUE) /
+      sum(population, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+actual_change <- global_actual %>%
+  summarise(
+    pct_change = (global_pm[year == 2020] -
+                    global_pm[year == 2020]) /
+      global_pm[year == 2015] * 100
+  ) %>%
+  pull(pct_change)
+
+
+cf_change <- global_cf %>%
+  summarise(
+    pct_change_cf = (global_pm_cf[year == 2015] -
+                       global_pm_cf[year == 2020]) /
+      global_pm_cf[year == 2020] * 100
+  ) %>%
+  pull(pct_change_cf)
+
+sprintf(
+  "Had pollution levels in these regions remained at their 2014 levels, global-average particulate concentrations would have %s by %.1f percent between 2015 and 2020, rather than %s by %.1f percent.",
+  ifelse(cf_change > 0, "increased", "declined"),
+  abs(cf_change),
+  ifelse(actual_change > 0, "increased", "declined"),
+  abs(actual_change)
+)

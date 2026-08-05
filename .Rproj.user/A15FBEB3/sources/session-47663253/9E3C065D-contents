@@ -1,0 +1,521 @@
+# ============================================================
+# AQLI 2024 | GADM Aggregation Pipeline
+# Purpose:
+# - Clean GADM2-level AQLI data
+# - Harmonize names & standards
+# - Aggregate to GADM1 and GADM0 levels
+# - Handle India (Dadra & Nagar Haveli, Daman & Diu) merge (objectid -1202)
+# - Export clean CSVs for visualization (Highcharter / Shiny)
+# ============================================================
+
+# ----------------------------
+# Load required libraries
+# ----------------------------
+library(dplyr)
+library(readr)
+library(stringr)
+library(stringi)
+library(htmltools)
+library(highcharter)
+
+# ----------------------------
+# Read GADM2-level AQLI data
+# ----------------------------
+gadm2_aqli_2024 <- read_csv("~/Downloads/aqli_gadm2_2024 (1).csv")
+gadm0_aqli_2023 <- read_csv("~/Desktop/India AQLI Data/AQLI Data/gadm0/gadm0_2023_wide.csv")
+
+gadm0_aqli_t <- read_csv("~/Downloads/aqli_gadm0_2024 (1).csv")
+# ----------------------------
+# Country-specific national standards overrides
+# ----------------------------
+gadm2_aqli_2024$natstandard[gadm2_aqli_2024$country == "Senegal"] <- 25
+gadm2_aqli_2024$natstandard[gadm2_aqli_2024$country == "México"]  <- 12
+gadm2_aqli_2024$natstandard[gadm2_aqli_2024$country == "Pakistan"]  <- 15
+gadm2_aqli_2024$natstandard[gadm2_aqli_2024$country == "China"]  <- 30
+
+# ----------------------------
+# Clean administrative names
+# - Remove leading apostrophes
+# ----------------------------
+gadm2_aqli_2024$name_1 <- str_remove(gadm2_aqli_2024$name_1, "^'+")
+gadm2_aqli_2024$name_2 <- str_remove(gadm2_aqli_2024$name_2, "^'+")
+
+gadm2_aqli_2024$name_1 <- replace_na(gadm2_aqli_2024$name_1, "NA")
+gadm2_aqli_2024$name_2 <- replace_na(gadm2_aqli_2024$name_2, "NA")
+# ----------------------------
+# Drop unwanted index columns
+# ----------------------------
+gadm2_aqli_2024 <- gadm2_aqli_2024 %>%
+  select(-c("...1", "X"))
+
+# ============================================================
+# Add continent & ISO information
+# ============================================================
+
+# Extract continent–ISO mapping from GADM0 (2023)
+continent_iso <- gadm0_aqli_2023 %>%
+  select(objectid_gadm0, iso_alpha3, continent) %>%
+  unique()
+
+# Attach continent info to GADM0 (2024)
+gadm0_aqli_2024 <- gadm0_aqli_t %>%
+  left_join(continent_iso, by = "objectid_gadm0") %>%
+  relocate(objectid_gadm0, iso_alpha3, continent, .before = 1)
+
+# Create country-level lookup
+continent_iso <- gadm0_aqli_2024 %>%
+  select(iso_alpha3, continent, country) %>%
+  distinct()
+
+# Attach continent info to GADM2
+gadm2_aqli_2024 <- gadm2_aqli_2024 %>%
+  select(-continent) %>%
+  left_join(continent_iso, by = "country") %>%
+  relocate(objectid_gadm2, iso_alpha3, continent, .before = 1)
+
+# ============================================================
+# Aggregate to GADM1 (State/Province level)
+# ============================================================
+
+gadm2_aqli_2024 <- read_csv("~/Downloads/aqli_gadm2_2024 (2).csv")
+gadm2_aqli_2024 <- gadm2_aqli_2024 %>%
+  select(-c("...1"))
+
+value_cols <- grep(
+  "^(pm\\d{4}|llpp_who_\\d{4}|llpp_nat_\\d{4})$",
+  names(gadm2_aqli_2024),
+  value = TRUE
+)
+
+gadm1_aqli <- gadm2_aqli_2024 %>%
+  group_by(iso_alpha3, continent, country, name_1,
+           whostandard, natstandard) %>%
+  summarise(
+    across(
+      all_of(value_cols),
+      ~ round(
+        sum(.x * population, na.rm = TRUE) /
+          sum(population, na.rm = TRUE),
+        2
+      )
+    ),
+    population = sum(population, na.rm = TRUE),
+    .groups = "drop"
+  ) %>% 
+    relocate(
+      iso_alpha3, continent, country, name_1,
+      population, whostandard, natstandard,
+      .before = 1
+    )
+
+write_csv(gadm1_aqli,"~/Downloads/gadm1_aqli_pg.csv")
+ 
+# df <- data.frame(
+#   objectid_gadm1 = 2056,
+#   iso_alpha3 = c("NRU"),
+#   continent = c("Oceania"),
+#   country = "Nauru",
+#   name_1 = "Boe",
+#   whostandard = c(5),
+#   stringsAsFactors = FALSE
+# )
+
+  
+  gadm1_aqli<-  gadm1_aqli %>%  arrange(tolower(country), tolower(name_1)) %>%
+  mutate(objectid_gadm1 = row_number()) %>%
+  relocate(
+    objectid_gadm1, iso_alpha3, continent, country, name_1,
+    population, whostandard, natstandard,
+    .before = 1
+  )
+
+# ============================================================
+# Aggregate to GADM0 (Country level)
+# ============================================================
+
+gadm0_aqli <- gadm2_aqli_2024 %>%
+  group_by(iso_alpha3, continent, country,
+           whostandard, natstandard) %>%
+  summarise(
+    across(
+      all_of(value_cols),
+      ~ round(
+        sum(.x * population, na.rm = TRUE) /
+          sum(population, na.rm = TRUE),
+        2
+      )
+    ),
+    population = sum(population, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(tolower(country)) %>%
+  mutate(objectid_gadm0 = row_number()) %>%
+  relocate(
+    objectid_gadm0, iso_alpha3, continent, country,
+    population, whostandard, natstandard,
+    .before = 1
+  )
+  
+  write_csv(gadm0_aqli, "~/Downloads/gadm0_aqli_pg.csv")
+
+# ============================================================
+# India-specific fix:
+# Merge Dadra & Nagar Haveli with Daman & Diu
+# ============================================================
+
+# Harmonize names at GADM2
+gadm2_aqli_2024 <- gadm2_aqli_2024 %>%
+  mutate(
+    name_1 = case_when(
+      name_1 %in% c("Daman and Diu", "Dadra and Nagar Haveli") ~
+        "Daman and Diu and Dadra and Nagar Haveli",
+      TRUE ~ name_1
+    )
+  )
+
+# Extract the two states from GADM1
+gadm1_rm_daman_haveli <- gadm1_aqli %>%
+  filter(objectid_gadm1 %in% c(1202, 1203)) %>%
+  mutate(
+    name_1 = "Daman and Diu and Dadra and Nagar Haveli"
+  ) %>%
+  group_by(iso_alpha3, continent, country,
+           name_1, whostandard, natstandard) %>%
+  summarise(
+    across(
+      all_of(value_cols),
+      ~ round(
+        sum(.x * population, na.rm = TRUE) /
+          sum(population, na.rm = TRUE),
+        2
+      )
+    ),
+    population = sum(population, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(objectid_gadm1 = 1202) %>%
+  relocate(
+    objectid_gadm1, iso_alpha3, continent, country, name_1,
+    population, whostandard, natstandard,
+    .before = 1
+  )
+
+# Remove old records and bind merged state
+gadm1_combined_dadar_daman <- gadm1_aqli %>%
+  filter(!objectid_gadm1 %in% c(1202, 1203)) %>%
+  bind_rows(gadm1_rm_daman_haveli)
+
+# ============================================================
+# Character sanitization for mapping & Highcharter
+# ============================================================
+
+gadm0_aqli$country <- stri_trans_general(gadm0_aqli$country, "Latin-ASCII")
+
+gadm1_combined_dadar_daman <- gadm1_combined_dadar_daman %>%
+  mutate(
+    country = stri_trans_general(country, "Latin-ASCII"),
+    name_1  = stri_trans_general(name_1,  "Latin-ASCII")
+  )
+
+gadm2_aqli_2024 <- gadm2_aqli_2024 %>%
+  mutate(
+    country = stri_trans_general(country, "Latin-ASCII"),
+    name_1  = stri_trans_general(name_1,  "Latin-ASCII"),
+    name_2  = stri_trans_general(name_2,  "Latin-ASCII")
+  )
+
+# ============================================================
+# Export final datasets
+# ============================================================
+
+write_csv(
+  gadm0_aqli,
+  "~/Desktop/My AQLI Work/AQLI 2026/gadm0_aqli_2024_pg.csv"
+)
+
+write_csv(
+  gadm1_combined_dadar_daman,
+  "~/Desktop/My AQLI Work/AQLI 2026/gadm1_aqli_2024_pg.csv"
+)
+
+write_csv(
+  gadm2_aqli_2024,
+  "~/Desktop/My AQLI Work/AQLI 2026/gadm2_aqli_2024_pg.csv"
+)
+
+
+
+# region_countries$country <- stri_trans_general(region_countries$country, "Latin-ASCII")
+# region_countries <- region_countries %>% rename(region = Region)
+# 
+# gadm0_aqli_2024_f <- left_join(gadm0_aqli_2024, region_countries %>% select(-c('No')), by = c("country"))
+# 
+# gadm0_aqli_2024_f <- gadm0_aqli_2024_f %>% relocate(objectid_gadm0, iso_alpha3, continent, region, .before = 1)
+# 
+# 
+# gadm1_aqli_2024_f <- left_join(gadm1_aqli_2024, region_countries %>% select(-c('No')), by = c("country"))
+# 
+# gadm1_aqli_2024_f <- gadm1_aqli_2024_f %>% relocate(objectid_gadm1, iso_alpha3, continent, region, .before = 1)
+# 
+# 
+# gadm2_aqli_2024_f <- left_join(gadm2_aqli_2024, region_countries %>% select(-c('No')), by = c("country"))
+# 
+# gadm2_aqli_2024_f <- gadm2_aqli_2024_f %>% relocate(objectid_gadm2, iso_alpha3, continent, region, .before = 1)
+# 
+# write_csv(
+#   gadm0_aqli_2024_f,
+#   "~/Desktop/My AQLI Work/AQLI 2026/gadm0_aqli_2024_rgn_pg.csv"
+# )
+# 
+# write_csv(
+#   gadm1_aqli_2024_f,
+#   "~/Desktop/My AQLI Work/AQLI 2026/gadm1_aqli_2024_rgn_pg.csv"
+# )
+# 
+# write_csv(
+#   gadm2_aqli_2024_f,
+#   "~/Desktop/My AQLI Work/AQLI 2026/gadm2_aqli_2024_rgn_pg.csv"
+# )
+# 
+
+
+
+# gadm1_aqli <- read_csv("~/Desktop/My AQLI Work/AQLI 2026/gadm1_aqli_2024_pg.csv")
+# gadm2_aqli_2024 <- read_csv("~/Desktop/My AQLI Work/AQLI 2026/gadm2_aqli_2024_pg.csv")
+
+##### Cross Checks
+sum(gadm0_aqli < 0, na.rm = TRUE)
+sum(gadm1_combined_dadar_daman < 0, na.rm = TRUE)
+sum(gadm2_aqli_2024 < 0, na.rm = TRUE)
+
+
+gadm0_aqli <- gadm0_aqli %>%
+  mutate(across(where(is.numeric), ~ ifelse(. < 0, 0, .)))
+
+
+gadm1_combined_dadar_daman <- gadm1_combined_dadar_daman %>%
+  mutate(across(where(is.numeric), ~ ifelse(. < 0, 0, .)))
+
+
+gadm2_aqli_2024 <- gadm2_aqli_2024 %>%
+  mutate(across(where(is.numeric), ~ ifelse(. < 0, 0, .)))
+
+gadm0_aqli <- gadm0_aqli %>%
+  filter(if_any(where(is.numeric), ~ . < 0))
+
+
+
+final_df <- gadm0_aqli_2023 %>%
+  anti_join(
+    gadm0_aqli,
+    by = c(
+      "country" = "country",
+      "objectid_gadm0" = "objectid_gadm0"
+    )
+  )
+
+final_df1 <- gadm0_aqli_2023 %>% select(country, objectid_gadm0) %>%
+  full_join(
+    gadm0_aqli %>% select(country, objectid_gadm0),
+    by = c(
+     # "country" = "country",
+      "objectid_gadm0" = "objectid_gadm0"
+    )
+  )
+
+
+#############################
+final_df <- gadm1_aqli_2023 %>%
+  anti_join(
+    gadm1_aqli,
+    by = c(
+      "country" = "country",
+      "name_1"  = "name_1",
+      "objectid_gadm1" = "objectid_gadm1"
+    )
+  )
+
+final_df1 <- gadm1_aqli_2023 %>% select(country, objectid_gadm1, name_1) %>%
+  full_join(
+    gadm1_aqli %>% select(country, objectid_gadm1, name_1),
+    by = c(
+      # "country" = "country",
+      "objectid_gadm1" = "objectid_gadm1"
+    )
+  )
+
+
+
+library(data.table)
+library(arrow)
+###############################################################
+gadm2_aqli <- as.data.table(read_csv("C:/Users/Purushottam/Desktop/AQLI/AQLI Dataset/gadm2/gadm2_2024_wide.csv")) 
+gadm1_aqli <- as.data.table(read_csv("C:/Users/Purushottam/Desktop/AQLI/AQLI Dataset/gadm1/gadm1_2024_wide.csv"))
+gadm0_aqli <- as.data.table(read_csv("C:/Users/Purushottam/Desktop/AQLI/AQLI Dataset/gadm0/gadm0_2024_wide.csv")) 
+
+
+gadm2_aqli$natstandard[gadm2_aqli$country == "China"]  <- 30
+gadm1_aqli$natstandard[gadm1_aqli$country == "China"]  <- 30
+gadm0_aqli$natstandard[gadm0_aqli$country == "China"]  <- 30
+
+# Updated from 20 to 25
+gadm2_aqli$natstandard[gadm2_aqli$country == "Colombia"]  <- 25
+gadm1_aqli$natstandard[gadm1_aqli$country == "Colombia"]  <- 25
+gadm0_aqli$natstandard[gadm0_aqli$country == "Colombia"]  <- 25
+
+gadm2_aqli_wo_nat <- gadm2_aqli %>% select("objectid_gadm2", "iso_alpha3", "continent", "region", "country", "name_1","name_2", "population", "whostandard", "natstandard"  , starts_with("pm"))
+
+
+gadm2_aqli_nat <- gadm2_aqli_wo_nat %>%
+  ungroup() %>%
+  mutate(
+    across(starts_with("pm"),
+           ~if_else(.x > whostandard, round(0.098*(.x - whostandard), 2), 0),
+           .names = "llpp_who_{substr(.col, 3, 6)}"),
+    across(starts_with("pm"), 
+           ~if_else(.x > natstandard, round(0.098*(.x - natstandard), 2), 0), 
+           .names = "llpp_nat_{substr(.col, 3, 6)}"))
+
+
+write_csv(gadm2_aqli_nat, "C:/Users/Purushottam/Desktop/gadm2_aqli_2024.csv")
+write_parquet(gadm2_aqli_nat, "C:/Users/Purushottam/Desktop/gadm2_aqli_2024.parquet")
+
+
+
+gadm1_aqli_wo_nat <- gadm1_aqli %>% select("objectid_gadm1", "iso_alpha3", "continent", "region", "country", "name_1", "population", "whostandard", "natstandard"  , starts_with("pm"))
+
+
+gadm1_aqli_nat <- gadm1_aqli_wo_nat %>%
+  ungroup() %>%
+  mutate(
+    across(starts_with("pm"),
+                ~if_else(.x > whostandard, round(0.098*(.x - whostandard), 2), 0),
+                .names = "llpp_who_{substr(.col, 3, 6)}"),
+         across(starts_with("pm"), 
+                ~if_else(.x > natstandard, round(0.098*(.x - natstandard), 2), 0), 
+                .names = "llpp_nat_{substr(.col, 3, 6)}"))
+  #rename(population = population_gadm1) %>%
+  #rename_with(.fn = ~sub("_weighted$", "", .x), .cols = ends_with("_weighted"))
+
+write_csv(gadm1_aqli_nat, "C:/Users/Purushottam/Desktop/gadm1_aqli_2024.csv")
+write_parquet(gadm1_aqli_nat, "C:/Users/Purushottam/Desktop/gadm1_aqli_2024.parquet")
+
+
+#gadm2 <- read_csv("~/Downloads/")
+gadm0_aqli_wo_nat <- gadm0_aqli %>% select("objectid_gadm0", "iso_alpha3", "continent", "region","country", "population", "whostandard", "natstandard"  , starts_with("pm"))
+
+gadm0_aqli_nat <- gadm0_aqli_wo_nat %>%
+  ungroup() %>%
+  mutate(
+    across(starts_with("pm"),
+           ~if_else(.x > whostandard, round(0.098*(.x - whostandard), 2), 0),
+           .names = "llpp_who_{substr(.col, 3, 6)}"),
+    across(starts_with("pm"), 
+           ~if_else(.x > natstandard, round(0.098*(.x - natstandard), 2), 0), 
+           .names = "llpp_nat_{substr(.col, 3, 6)}"))
+#rename(population = population_gadm1) %>%
+#rename_with(.fn = ~sub("_weighted$", "", .x), .cols = ends_with("_weighted"))
+
+
+
+
+write_csv(gadm0_aqli_nat, "C:/Users/Purushottam/Desktop/gadm0_aqli_2024.csv")
+write_parquet(gadm0_aqli_nat, "C:/Users/Purushottam/Desktop/gadm0_aqli_2024.parquet")
+
+
+########## China Standard Updates ####################
+
+gadm0_aqli_up <- gadm0_aqli %>% select("objectid_gadm0", "iso_alpha3", "continent", "region", "country", "population",
+                                       "whostandard","natstandard", starts_with("pm"), starts_with("llpp_who")) %>%
+  ungroup() %>%
+  mutate(
+    across(starts_with("pm"), 
+           ~if_else(.x > natstandard, round(0.098*(.x - natstandard), 2), 0), 
+           .names = "llpp_nat_{substr(.col, 3, 6)}"))
+
+gadm0_aqli_up$region[gadm0_aqli_up$country=="China"] <-"China"
+gadm0_aqli_up$region[gadm0_aqli_up$country=="Canada"] <-"US & Canada"
+gadm0_aqli_up$region[gadm0_aqli_up$country=="United States"] <-"US & Canada"
+
+gadm1_aqli_up <- gadm1_aqli %>% select("objectid_gadm1", "iso_alpha3", "continent", "region", "country", "name_1", "population",
+                                       "whostandard","natstandard", starts_with("pm"), starts_with("llpp_who")) %>%
+  ungroup() %>%
+  mutate(
+    across(starts_with("pm"), 
+           ~if_else(.x > natstandard, round(0.098*(.x - natstandard), 2), 0), 
+           .names = "llpp_nat_{substr(.col, 3, 6)}"))
+
+gadm1_aqli_up$region[gadm1_aqli_up$country=="China"] <-"China"
+gadm1_aqli_up$region[gadm1_aqli_up$country=="Canada"] <-"US & Canada"
+gadm1_aqli_up$region[gadm1_aqli_up$country=="United States"] <-"US & Canada"
+
+gadm2_aqli_up <- gadm2_aqli %>% select("objectid_gadm2", "iso_alpha3", "continent", "region", "country", "name_1", "name_2", "population",
+                                       "whostandard","natstandard", starts_with("pm"), starts_with("llpp_who")) %>%
+  ungroup() %>%
+  mutate(
+    across(starts_with("pm"), 
+           ~if_else(.x > natstandard, round(0.098*(.x - natstandard), 2), 0), 
+           .names = "llpp_nat_{substr(.col, 3, 6)}"))
+
+gadm2_aqli_up$region[gadm2_aqli_up$country=="China"] <-"China"
+gadm2_aqli_up$region[gadm2_aqli_up$country=="Canada"] <-"US & Canada"
+gadm2_aqli_up$region[gadm2_aqli_up$country=="United States"] <-"US & Canada"
+
+write_csv(gadm2_aqli_up, "~/Desktop/My AQLI Work/AQLI 2026/AQLI Data 2024/gadm2_aqli_Apr2026.csv")
+write_csv(gadm1_aqli_up, "~/Desktop/My AQLI Work/AQLI 2026/AQLI Data 2024/gadm1_aqli_Apr2026.csv")
+write_csv(gadm0_aqli_up, "~/Desktop/My AQLI Work/AQLI 2026/AQLI Data 2024/gadm0_aqli_Apr2026.csv")
+
+############################################################### github ############
+gadm2_aqli <- as.data.table(read_csv("C:/Users/Purushottam/Desktop/gadm2_aqli_2024.csv")) 
+gadm1_aqli <- as.data.table(read_csv("C:/Users/Purushottam/Desktop/gadm1_aqli_2024.csv"))
+gadm0_aqli <- as.data.table(read_csv("C:/Users/Purushottam/Desktop/gadm0_aqli_2024.csv")) 
+
+write_parquet(gadm2_aqli, "C:/Users/Purushottam/Desktop/gadm2_2024_wide.parquet")
+write_parquet(gadm1_aqli, "C:/Users/Purushottam/Desktop/gadm1_2024_wide.parquet")
+write_parquet(gadm0_aqli, "C:/Users/Purushottam/Desktop/gadm0_2024_wide.parquet")
+
+library(tidyverse)
+long0_df <- gadm0_aqli %>%
+  pivot_longer(
+    cols = matches("^(pm|llpp_who|llpp_nat)_?\\d{4}$"),
+    names_to = c(".value", "year"),
+    names_pattern = "(pm|llpp_who|llpp_nat)_?(\\d{4})"
+  ) %>%
+  mutate(year = as.integer(year)) %>%
+  select(objectid_gadm0, iso_alpha3, continent, region, country,
+         population, whostandard, natstandard,
+         year, pm, llpp_who, llpp_nat)
+
+write_csv(long0_df, "C:/Users/Purushottam/Desktop/gadm0_2024_narrow.csv")
+
+long1_df <- gadm1_aqli %>%
+  pivot_longer(
+    cols = matches("^(pm|llpp_who|llpp_nat)_?\\d{4}$"),
+    names_to = c(".value", "year"),
+    names_pattern = "(pm|llpp_who|llpp_nat)_?(\\d{4})"
+  ) %>%
+  mutate(year = as.integer(year)) %>%
+  select(objectid_gadm1, iso_alpha3, continent, region, country, name_1,
+         population, whostandard, natstandard,
+         year, pm, llpp_who, llpp_nat)
+
+write_csv(long1_df, "C:/Users/Purushottam/Desktop/gadm1_2024_narrow.csv")
+
+long2_df <- gadm2_aqli %>%
+  pivot_longer(
+    cols = matches("^(pm|llpp_who|llpp_nat)_?\\d{4}$"),
+    names_to = c(".value", "year"),
+    names_pattern = "(pm|llpp_who|llpp_nat)_?(\\d{4})"
+  ) %>%
+  mutate(year = as.integer(year)) %>%
+  select(objectid_gadm2, iso_alpha3, continent, region,country, name_1,name_2,
+         population, whostandard, natstandard,
+         year, pm, llpp_who, llpp_nat)
+
+write_csv(long2_df, "C:/Users/Purushottam/Desktop/gadm2_2024_narrow.csv")
+
+
+write_parquet(long0_df, "C:/Users/Purushottam/Desktop/gadm0_2024_narrow.parquet")
+write_parquet(long1_df, "C:/Users/Purushottam/Desktop/gadm1_2024_narrow.parquet")
+write_parquet(long2_df, "C:/Users/Purushottam/Desktop/gadm2_2024_narrow.parquet")
+
